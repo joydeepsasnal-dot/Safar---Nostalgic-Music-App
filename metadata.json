@@ -1,0 +1,6 @@
+{
+  "name": "Safar Radio - Bus Driver, Salon & Truck Driver Playlists",
+  "description": "Atmospheric retro music player featuring Bus Driver, Deluxe Salon, and Truck Driver playlists with live customizable clock, ambient sound effects, and YouTube integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
