@@ -34,7 +34,7 @@ export default function App() {
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(240);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const [videoVisible, setVideoVisible] = useState(false);
@@ -76,6 +76,8 @@ export default function App() {
     setListenersCount(playlist.initialListeners);
     setCurrentTrack(playlist.featuredTracks[0]);
     setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
 
     // Adjust default clock flavor to match the screenshot vibe
     if (playlist.id === 'truck-driver') {
@@ -126,7 +128,7 @@ export default function App() {
     };
     setChaiMessage(msgs[activePlaylist.id] || 'Fresh hot chai cup served!');
     setShowChaiToast(true);
-    setTimeout(() => setShowChaiToast(false), 3500);
+    window.setTimeout(() => setShowChaiToast(false), 3500);
   };
 
   // Scissors & Spray
@@ -162,20 +164,6 @@ export default function App() {
     handleSelectPlaylist(newPl);
   };
 
-  // Progress timer simulation while playing
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setCurrentTime((t) => {
-          if (t >= duration) return 0;
-          return t + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, duration]);
-
   // Listener count subtle fluctuation
   useEffect(() => {
     const timer = setInterval(() => {
@@ -188,7 +176,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in an input
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) || (e.target as HTMLElement)?.isContentEditable || e.altKey || e.ctrlKey || e.metaKey) {
         return;
       }
 
@@ -196,8 +184,6 @@ export default function App() {
         e.preventDefault();
         if (ytControlsRef.current) {
           ytControlsRef.current.togglePlay();
-        } else {
-          setIsPlaying((p) => !p);
         }
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
@@ -353,11 +339,11 @@ export default function App() {
         onTogglePlay={() => {
           if (ytControlsRef.current) {
             ytControlsRef.current.togglePlay();
-          } else {
-            setIsPlaying((p) => !p);
           }
         }}
         onNext={() => ytControlsRef.current?.next()}
+        onShuffleChange={(enabled) => ytControlsRef.current?.setShuffle(enabled)}
+        onLoopChange={(enabled) => ytControlsRef.current?.setLoop(enabled)}
         onPrev={() => ytControlsRef.current?.prev()}
         volume={volume}
         onVolumeChange={(val) => {
@@ -384,6 +370,10 @@ export default function App() {
         playlistId={activePlaylist.youtubePlaylistId}
         isPlaying={isPlaying}
         onPlayStateChange={(playing) => setIsPlaying(playing)}
+        onProgress={(seconds, total) => {
+          setCurrentTime(seconds);
+          setDuration(total);
+        }}
         onTrackChange={(title, artist) => {
           setCurrentTrack({
             id: `yt-${Date.now()}`,
@@ -425,9 +415,8 @@ export default function App() {
         playlist={activePlaylist}
         currentTrackId={currentTrack?.id}
         onSelectTrack={(track) => {
-          setCurrentTrack(track);
-          setIsPlaying(true);
-          ytControlsRef.current?.play();
+          const index = activePlaylist.featuredTracks.findIndex((item) => item.id === track.id);
+          if (index >= 0) ytControlsRef.current?.playAt(index);
         }}
       />
 
