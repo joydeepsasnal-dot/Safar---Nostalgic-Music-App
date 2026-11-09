@@ -21,6 +21,8 @@ interface MusicPlayerProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   onNext: () => void;
+  onShuffleChange: (enabled: boolean) => void;
+  onLoopChange: (enabled: boolean) => void;
   onPrev: () => void;
   volume: number;
   onVolumeChange: (val: number) => void;
@@ -41,6 +43,8 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   isPlaying,
   onTogglePlay,
   onNext,
+  onShuffleChange,
+  onLoopChange,
   onPrev,
   volume,
   onVolumeChange,
@@ -56,14 +60,14 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   tracklistOpen,
 }) => {
   const [isShuffle, setIsShuffle] = useState(false);
-  const [isLoop, setIsLoop] = useState(true);
+  const [isLoop, setIsLoop] = useState(false);
 
   // Fallback track display if none playing
   const displayTitle = currentTrack?.title || `${playlist.name} Streaming`;
   const displayArtist = currentTrack?.artist || playlist.subtitle;
   const displayThumb = currentTrack?.thumbnail || playlist.bgImage;
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   return (
     <footer
@@ -113,7 +117,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
             <div className="flex items-center gap-3 sm:gap-4">
               <button
                 type="button"
-                onClick={() => setIsShuffle((v) => !v)}
+                onClick={() => { const next = !isShuffle; setIsShuffle(next); onShuffleChange(next); }}
                 aria-label="Toggle shuffle"
                 className={`p-1.5 rounded-full text-xs transition-colors ${
                   isShuffle ? 'text-amber-400' : 'text-white/40 hover:text-white'
@@ -160,7 +164,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
               <button
                 type="button"
-                onClick={() => setIsLoop((v) => !v)}
+                onClick={() => { const next = !isLoop; setIsLoop(next); onLoopChange(next); }}
                 aria-label="Toggle repeat"
                 className={`p-1.5 rounded-full text-xs transition-colors ${
                   isLoop ? 'text-amber-400' : 'text-white/40 hover:text-white'
@@ -178,7 +182,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const pos = (e.clientX - rect.left) / rect.width;
-                  onSeek(pos * (duration || 100));
+                  if (duration > 0) onSeek(Math.min(duration, Math.max(0, pos * duration)));
                 }}
               >
                 <div
@@ -189,7 +193,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
                   }}
                 />
               </div>
-              <span className="w-8 text-left">{formatDuration(duration || 240)}</span>
+              <span className="w-8 text-left">{duration > 0 ? formatDuration(duration) : '--:--'}</span>
             </div>
           </div>
 

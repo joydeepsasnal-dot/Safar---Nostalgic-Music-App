@@ -91,7 +91,7 @@ export const TracklistDrawer: React.FC<TracklistDrawerProps> = ({
       {/* Info notice */}
       <div className="border-t border-white/10 pt-3 text-[11px] text-white/50 flex items-center gap-2">
         <Radio className="h-4 w-4 text-amber-400" />
-        <span>Continuous YouTube playback streaming online</span>
+        <span>Tracks follow YouTube playlist order; titles may differ from previews</span>
       </div>
     </div>
   );
