@@ -12,6 +12,7 @@ interface YouTubePlayerProps {
   playlistId: string;
   isPlaying: boolean;
   onPlayStateChange: (playing: boolean) => void;
+  onProgress: (seconds: number, duration: number) => void;
   onTrackChange?: (title: string, artist: string) => void;
   volume: number;
   isMuted: boolean;
@@ -29,12 +30,16 @@ export interface YouTubeControls {
   setVolume: (val: number) => void;
   seekTo: (seconds: number) => void;
   loadPlaylist: (id: string) => void;
+  playAt: (index: number) => void;
+  setShuffle: (enabled: boolean) => void;
+  setLoop: (enabled: boolean) => void;
 }
 
 export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   playlistId,
   isPlaying,
   onPlayStateChange,
+  onProgress,
   onTrackChange,
   volume,
   isMuted,
@@ -45,6 +50,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
+  const callbackRef = useRef({ onPlayStateChange, onProgress, onTrackChange });
+  callbackRef.current = { onPlayStateChange, onProgress, onTrackChange };
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
   const [currentVideoTitle, setCurrentVideoTitle] = useState('');
   const [pipExpanded, setPipExpanded] = useState(false);
 
@@ -69,7 +78,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           playerVars: {
             listType: 'playlist',
             list: playlistId,
-            autoplay: 1,
+            autoplay: 0,
             controls: 1,
             rel: 0,
             modestbranding: 1,
@@ -81,11 +90,12 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               if (!isMounted) return;
               setIsReady(true);
               try {
-                event.target.setVolume(isMuted ? 0 : volume);
+                event.target.setVolume(volume);
+                if (isMuted) event.target.mute();
                 const data = event.target.getVideoData();
                 if (data && data.title && data.title.trim().length > 0) {
                   setCurrentVideoTitle(data.title);
-                  if (onTrackChange) onTrackChange(data.title, data.author || 'YouTube');
+                  callbackRef.current.onTrackChange?.(data.title, data.author || 'YouTube');
                 }
               } catch (e) {
                 console.warn('onReady setup error:', e);
@@ -95,18 +105,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               if (!isMounted) return;
               // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, 5: CUED
               if (event.data === window.YT.PlayerState.PLAYING) {
-                onPlayStateChange(true);
+                callbackRef.current.onPlayStateChange(true);
                 try {
                   const data = event.target.getVideoData();
                   if (data && data.title && data.title.trim().length > 0) {
                     setCurrentVideoTitle(data.title);
-                    if (onTrackChange) onTrackChange(data.title, data.author || 'YouTube');
+                    callbackRef.current.onTrackChange?.(data.title, data.author || 'YouTube');
                   }
                 } catch {
                   // ignore
                 }
               } else if (event.data === window.YT.PlayerState.PAUSED || event.data === window.YT.PlayerState.ENDED) {
-                onPlayStateChange(false);
+                callbackRef.current.onPlayStateChange(false);
               }
             },
           },
@@ -143,14 +153,36 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           // ignore
         }
       }
+      ytPlayerRef.current = null;
+      playerRefCallback(null);
+      setIsReady(false);
     };
   }, []);
 
+  // Report actual YouTube playback progress, not a simulated elapsed timer.
+  useEffect(() => {
+    if (!isReady) return;
+    const report = () => {
+      const player = ytPlayerRef.current;
+      if (!player || typeof player.getCurrentTime !== 'function') return;
+      try {
+        const elapsed = player.getCurrentTime();
+        const total = player.getDuration();
+        if (Number.isFinite(elapsed) && Number.isFinite(total)) {
+          callbackRef.current.onProgress(Math.max(0, elapsed), Math.max(0, total));
+        }
+      } catch { /* Player may be changing tracks. */ }
+    };
+    report();
+    const timer = window.setInterval(report, 500);
+    return () => window.clearInterval(timer);
+  }, [isReady]);
+
   // Handle playlist change
   useEffect(() => {
-    if (isReady && ytPlayerRef.current && typeof ytPlayerRef.current.loadPlaylist === 'function') {
+    if (isReady && ytPlayerRef.current && typeof ytPlayerRef.current.cuePlaylist === 'function') {
       try {
-        ytPlayerRef.current.loadPlaylist({
+        ytPlayerRef.current.cuePlaylist({
           list: playlistId,
           listType: 'playlist',
           index: 0,
@@ -195,7 +227,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     },
     togglePlay: () => {
       try {
-        if (isPlaying) {
+        if (isPlayingRef.current) {
           ytPlayerRef.current?.pauseVideo();
         } else {
           ytPlayerRef.current?.playVideo();
@@ -234,7 +266,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     },
     loadPlaylist: (id: string) => {
       try {
-        ytPlayerRef.current?.loadPlaylist({
+        ytPlayerRef.current?.cuePlaylist({
           list: id,
           listType: 'playlist',
           index: 0,
@@ -243,10 +275,21 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         console.warn(e);
       }
     },
+    playAt: (index: number) => {
+      try {
+        if (Number.isInteger(index) && index >= 0) ytPlayerRef.current?.playVideoAt(index);
+      } catch (e) { console.warn(e); }
+    },
+    setShuffle: (enabled: boolean) => {
+      try { ytPlayerRef.current?.setShuffle(enabled); } catch (e) { console.warn(e); }
+    },
+    setLoop: (enabled: boolean) => {
+      try { ytPlayerRef.current?.setLoop(enabled); } catch (e) { console.warn(e); }
+    },
   };
 
   useEffect(() => {
-    playerRefCallback(controls);
+    playerRefCallback(isReady ? controls : null);
   }, [isReady, isPlaying]);
 
   return (
